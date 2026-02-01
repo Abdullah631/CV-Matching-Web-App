@@ -7,6 +7,60 @@ from .serializers import PredictRequestSerializer, PredictWithFilesSerializer
 from matcher.ml.predictor import predict_match
 from matcher.ml.file_extractor import FileExtractor, FileExtractionError
 from matcher.ml.preprocessor import TextPreprocessor
+import traceback
+
+
+def _process_prediction(cv_text: str, jd_text: str) -> Response:
+    """
+    Helper function to process prediction after text extraction
+    """
+    try:
+        # Preprocess texts
+        cv_preprocessed = TextPreprocessor.preprocess_cv(cv_text)
+        jd_preprocessed = TextPreprocessor.preprocess_jd(jd_text)
+        
+        # Validate preprocessed texts
+        cv_valid, cv_error = TextPreprocessor.validate_preprocessed_text(cv_preprocessed)
+        jd_valid, jd_error = TextPreprocessor.validate_preprocessed_text(jd_preprocessed)
+        
+        if not cv_valid:
+            return Response(
+                {'error': 'CV validation failed', 'details': cv_error},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not jd_valid:
+            return Response(
+                {'error': 'JD validation failed', 'details': jd_error},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get prediction from ML model (use cleaned text)
+        result = predict_match(cv_preprocessed['cleaned'], jd_preprocessed['cleaned'])
+        
+        # Return result with preprocessing statistics (no database save)
+        response_data = {
+            'skill_match': result['skill_match'],
+            'experience_match': result['experience_match'],
+            'education_match': result['education_match'],
+            'semantic_similarity': result['semantic_similarity'],
+            'overall_match': result['overall_match'],
+            'preprocessing': {
+                'cv_stats': TextPreprocessor.get_preprocessing_stats(cv_text),
+                'jd_stats': TextPreprocessor.get_preprocessing_stats(jd_text)
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response(
+            {
+                'error': 'Error processing prediction',
+                'details': str(e)
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 class PredictionView(APIView):
@@ -14,6 +68,8 @@ class PredictionView(APIView):
     API endpoint for CV-JD matching predictions (stateless)
     """
     parser_classes = (MultiPartParser, FormParser, JSONParser)
+    authentication_classes = []
+    permission_classes = []
 
     def post(self, request):
         """
@@ -25,21 +81,30 @@ class PredictionView(APIView):
             "jd_text": "..."
         }
         """
-        serializer = PredictRequestSerializer(data=request.data)
-        
-        if serializer.is_valid():
-            cv_text = serializer.validated_data.get('cv_text', '').strip()
-            jd_text = serializer.validated_data.get('jd_text', '').strip()
+        try:
+            print(f"Received request data: {request.data}")
+            serializer = PredictRequestSerializer(data=request.data)
             
-            if not cv_text or not jd_text:
-                return Response(
-                    {'error': 'Both CV and JD text are required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            if serializer.is_valid():
+                cv_text = serializer.validated_data.get('cv_text', '').strip()
+                jd_text = serializer.validated_data.get('jd_text', '').strip()
+                
+                if not cv_text or not jd_text:
+                    return Response(
+                        {'error': 'Both CV and JD text are required'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                return _process_prediction(cv_text, jd_text)
             
-            return self._process_prediction(cv_text, jd_text)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"ERROR in PredictionView.post: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': 'Internal server error', 'details': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class FileUploadPredictionView(APIView):
@@ -47,6 +112,8 @@ class FileUploadPredictionView(APIView):
     API endpoint for CV-JD matching with file uploads (stateless)
     """
     parser_classes = (MultiPartParser, FormParser, JSONParser)
+    authentication_classes = []
+    permission_classes = []
     
     def post(self, request):
         """
@@ -84,7 +151,7 @@ class FileUploadPredictionView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
                 
-                return self._process_prediction(cv_text, jd_text)
+                return _process_prediction(cv_text, jd_text)
                 
             except FileExtractionError as e:
                 return Response(
@@ -104,59 +171,6 @@ class FileUploadPredictionView(APIView):
                 )
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @staticmethod
-    def _process_prediction(cv_text: str, jd_text: str) -> Response:
-        """
-        Internal method to process prediction after text extraction
-        """
-        try:
-            # Preprocess texts
-            cv_preprocessed = TextPreprocessor.preprocess_cv(cv_text)
-            jd_preprocessed = TextPreprocessor.preprocess_jd(jd_text)
-            
-            # Validate preprocessed texts
-            cv_valid, cv_error = TextPreprocessor.validate_preprocessed_text(cv_preprocessed)
-            jd_valid, jd_error = TextPreprocessor.validate_preprocessed_text(jd_preprocessed)
-            
-            if not cv_valid:
-                return Response(
-                    {'error': 'CV validation failed', 'details': cv_error},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if not jd_valid:
-                return Response(
-                    {'error': 'JD validation failed', 'details': jd_error},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Get prediction from ML model (use cleaned text)
-            result = predict_match(cv_preprocessed['cleaned'], jd_preprocessed['cleaned'])
-            
-            # Return result with preprocessing statistics (no database save)
-            response_data = {
-                'skill_match': result['skill_match'],
-                'experience_match': result['experience_match'],
-                'education_match': result['education_match'],
-                'semantic_similarity': result['semantic_similarity'],
-                'overall_match': result['overall_match'],
-                'preprocessing': {
-                    'cv_stats': TextPreprocessor.get_preprocessing_stats(cv_text),
-                    'jd_stats': TextPreprocessor.get_preprocessing_stats(jd_text)
-                }
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            return Response(
-                {
-                    'error': 'Error processing prediction',
-                    'details': str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 
 @api_view(['GET'])

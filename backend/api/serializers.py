@@ -3,25 +3,20 @@ from rest_framework import serializers
 
 class PredictRequestSerializer(serializers.Serializer):
     """Serializer for CV-JD matching prediction requests (text only)"""
-    cv_text = serializers.CharField(max_length=50000, required=False, allow_blank=True)
-    jd_text = serializers.CharField(max_length=50000, required=False, allow_blank=True)
+    cv_text = serializers.CharField(max_length=50000, required=True, allow_blank=False)
+    jd_text = serializers.CharField(max_length=50000, required=True, allow_blank=False)
 
-    def validate(self, data):
-        if not data.get('cv_text') and not data.get('jd_text'):
-            raise serializers.ValidationError(
-                "At least one of cv_text or jd_text must be provided"
-            )
-        
-        cv_text = data.get('cv_text', '').strip()
-        jd_text = data.get('jd_text', '').strip()
-
-        if cv_text and len(cv_text) < 10:
+    def validate_cv_text(self, value):
+        value = value.strip()
+        if len(value) < 10:
             raise serializers.ValidationError("CV text must be at least 10 characters long")
-        
-        if jd_text and len(jd_text) < 10:
+        return value
+    
+    def validate_jd_text(self, value):
+        value = value.strip()
+        if len(value) < 10:
             raise serializers.ValidationError("Job description must be at least 10 characters long")
-        
-        return data
+        return value
 
 
 class PredictWithFilesSerializer(serializers.Serializer):
