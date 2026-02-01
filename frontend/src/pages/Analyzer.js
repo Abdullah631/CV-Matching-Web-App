@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 import './Analyzer.css';
 
 const Analyzer = () => {
@@ -152,7 +153,7 @@ const Analyzer = () => {
       }
 
       const response = await axios.post(
-        'http://localhost:8000/api/predict-with-files/',
+        API_ENDPOINTS.PREDICT_WITH_FILES,
         formData,
         {
           headers: {
@@ -163,10 +164,21 @@ const Analyzer = () => {
 
       navigate('/results', { state: { result: response.data } });
     } catch (err) {
-      console.error('Error:', err);
-      const errorMsg = err.response?.data?.details || 
-                      err.response?.data?.error ||
-                      'An error occurred. Please check your inputs and try again.';
+      console.error('Full Error:', err);
+      console.error('Error Response:', err.response);
+      console.error('Error Message:', err.message);
+      
+      let errorMsg = 'An error occurred. Please check your inputs and try again.';
+      
+      if (err.response?.data?.details) {
+        errorMsg = err.response.data.details;
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.message) {
+        errorMsg = `Network error: ${err.message}`;
+      }
+      
+      console.error('Final Error Message:', errorMsg);
       setError(errorMsg);
     } finally {
       setLoading(false);

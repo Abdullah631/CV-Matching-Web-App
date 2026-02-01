@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 import './MatcherForm.css';
 
 const MatcherForm = ({ onResult, loading, setLoading }) => {
@@ -167,7 +168,7 @@ const MatcherForm = ({ onResult, loading, setLoading }) => {
       }
 
       const response = await axios.post(
-        'http://localhost:8000/api/predict-with-files/',
+        API_ENDPOINTS.PREDICT_WITH_FILES,
         formData,
         {
           headers: {
@@ -182,10 +183,21 @@ const MatcherForm = ({ onResult, loading, setLoading }) => {
       setCvFile(null);
       setJdFile(null);
     } catch (err) {
-      console.error('Error:', err);
-      const errorMsg = err.response?.data?.details || 
-                      err.response?.data?.error ||
-                      'An error occurred. Please check your inputs and try again.';
+      console.error('Full Error:', err);
+      console.error('Error Response:', err.response);
+      console.error('Error Message:', err.message);
+      
+      let errorMsg = 'An error occurred. Please check your inputs and try again.';
+      
+      if (err.response?.data?.details) {
+        errorMsg = err.response.data.details;
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.message) {
+        errorMsg = `Network error: ${err.message}`;
+      }
+      
+      console.error('Final Error Message:', errorMsg);
       setError(errorMsg);
     } finally {
       setLoading(false);
