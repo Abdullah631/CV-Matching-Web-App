@@ -95,6 +95,14 @@ SKILLS = [
 DEGREE_RANK = {"Other": 0, "Bachelor": 1, "Master": 2, "PhD": 3}
 
 # =========================
+# GUARDRAIL CONSTANTS
+# =========================
+
+SKILL_MIN = 20          # %
+SEMANTIC_MIN = 40       # %
+MAX_MISMATCH_SCORE = 45 # %
+
+# =========================
 # PREPROCESSING
 # =========================
 
@@ -107,43 +115,29 @@ def clean_text(text):
 def extract_skills(text):
     return list(set(skill for skill in SKILLS if skill in text))
 
-
 # =========================
-# EXPERIENCE FIX (CORE)
+# EXPERIENCE
 # =========================
 
 def extract_experience_years(text):
-    """
-    Returns experience in years (float)
-    Handles years, months, internships, fresher
-    """
     text = text.lower()
 
-    # Years
     year_match = re.search(r'(\d+(\.\d+)?)\s*(years|yrs|year|yr)', text)
     if year_match:
         return float(year_match.group(1))
 
-    # Months
     month_match = re.search(r'(\d+)\s*(months|month|mos|mo)', text)
     if month_match:
         return round(int(month_match.group(1)) / 12, 2)
 
-    # Internship / Fresher
-    if any(word in text for word in ["intern", "internship", "fresher", "entry level", "entry-level"]):
-        return 0.5  # heuristic for entry-level
+    if any(w in text for w in ["intern", "internship", "fresher", "entry level", "entry-level"]):
+        return 0.5
 
     return 0.0
 
 
 def experience_semantic_score(cv_text, jd_text):
-    """
-    Semantic similarity ONLY for experience-related content
-    """
-    keywords = [
-        "experience", "intern", "internship", "worked",
-        "responsibilities", "employment", "job", "role"
-    ]
+    keywords = ["experience", "intern", "internship", "worked", "employment", "job", "role"]
 
     def filter_exp(text):
         return " ".join([w for w in text.split() if w in keywords])
@@ -152,7 +146,7 @@ def experience_semantic_score(cv_text, jd_text):
     jd_exp = filter_exp(jd_text)
 
     if not cv_exp or not jd_exp:
-        return 0.3  # neutral baseline
+        return 0.3
 
     cv_vec = bert_model.encode([cv_exp])
     jd_vec = bert_model.encode([jd_exp])
@@ -160,27 +154,16 @@ def experience_semantic_score(cv_text, jd_text):
 
 
 def experience_score(cv_text, jd_text):
-    """
-    Final experience score (0–100)
-    """
     cv_years = extract_experience_years(cv_text)
     jd_years = extract_experience_years(jd_text)
 
-    # Numeric ratio
     numeric_score = min(cv_years / max(jd_years, 0.5), 1.0)
-
-    # Semantic similarity
     semantic_score = experience_semantic_score(cv_text, jd_text)
 
-    # Rule boost for entry-level match
-    if cv_years <= 1 and jd_years <= 1:
-        rule_boost = 0.9
-    else:
-        rule_boost = 0.5
+    rule_boost = 0.9 if cv_years <= 1 and jd_years <= 1 else 0.5
 
     final = (0.4 * numeric_score) + (0.4 * semantic_score) + (0.2 * rule_boost)
     return round(final * 100, 2)
-
 
 # =========================
 # EDUCATION
@@ -191,7 +174,7 @@ def extract_degree(text):
         return "PhD"
     if "master" in text or "msc" in text or "m.sc" in text:
         return "Master"
-    if "bachelor" in text or "bsc" in text or "b.sc":
+    if "bachelor" in text or "bsc" in text or "b.sc" in text:
         return "Bachelor"
     return "Other"
 
@@ -203,6 +186,20 @@ def education_score(cv, jd):
         return 100
     return 70
 
+# =========================
+# DOMAIN GUARDRAIL (KEY FIX)
+# =========================
+
+def apply_domain_guardrail(skill, semantic, overall):
+    # Strong domain mismatch
+    if skill < SKILL_MIN and semantic < SEMANTIC_MIN:
+        return min(overall, MAX_MISMATCH_SCORE)
+
+    # Extreme mismatch (absolute rejection)
+    if skill == 0 and semantic < 30:
+        return min(overall, 30)
+
+    return overall
 
 # =========================
 # MAIN PREDICTOR
@@ -217,20 +214,23 @@ def predict_match(cv_text, jd_text):
     jd_skills = extract_skills(jd)
     skill_pct = (len(set(cv_skills) & set(jd_skills)) / len(jd_skills) if jd_skills else 0) * 100
 
-    # Experience (FIXED)
+    # Experience
     exp_pct = experience_score(cv, jd)
 
     # Education
     edu_pct = education_score(extract_degree(cv), extract_degree(jd))
 
-    # Overall semantic
+    # Semantic
     cv_vec = bert_model.encode([cv])
     jd_vec = bert_model.encode([jd])
     semantic = cosine_similarity(cv_vec, jd_vec)[0][0] * 100
 
-    # Regression model
+    # Regression prediction
     X = np.array([[skill_pct, exp_pct, edu_pct, semantic]])
-    overall = float(reg_model.predict(X)[0])
+    raw_overall = float(reg_model.predict(X)[0])
+
+    # APPLY GUARDRAIL ✅
+    overall = apply_domain_guardrail(skill_pct, semantic, raw_overall)
 
     return {
         "skill_match": round(skill_pct, 2),
