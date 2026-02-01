@@ -1,0 +1,377 @@
+import React, { useState } from 'react';
+import axios from 'axios';
+import './MatcherForm.css';
+
+const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
+  const [cvText, setCvText] = useState('');
+  const [jdText, setJdText] = useState('');
+  const [cvFile, setCvFile] = useState(null);
+  const [jdFile, setJdFile] = useState(null);
+  const [cvMode, setCvMode] = useState('text'); // 'text' or 'file'
+  const [jdMode, setJdMode] = useState('text'); // 'text' or 'file'
+  const [error, setError] = useState('');
+  const [cvDragActive, setCvDragActive] = useState(false);
+  const [jdDragActive, setJdDragActive] = useState(false);
+
+  const SUPPORTED_FORMATS = ['pdf', 'docx', 'doc', 'txt', 'pptx'];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const validateFile = (file) => {
+    if (!file) return { valid: false, error: 'No file selected' };
+
+    const fileName = file.name.toLowerCase();
+    const fileExt = fileName.split('.').pop();
+
+    if (!SUPPORTED_FORMATS.includes(fileExt)) {
+      return {
+        valid: false,
+        error: `Unsupported format. Supported: ${SUPPORTED_FORMATS.join(', ')}`
+      };
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      return {
+        valid: false,
+        error: `File too large. Maximum ${(MAX_FILE_SIZE / (1024 * 1024)).toFixed(0)}MB`
+      };
+    }
+
+    return { valid: true, error: '' };
+  };
+
+  const handleCvFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validation = validateFile(file);
+      if (validation.valid) {
+        setCvFile(file);
+        setError('');
+      } else {
+        setError(`CV: ${validation.error}`);
+      }
+    }
+  };
+
+  const handleJdFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validation = validateFile(file);
+      if (validation.valid) {
+        setJdFile(file);
+        setError('');
+      } else {
+        setError(`JD: ${validation.error}`);
+      }
+    }
+  };
+
+  // Drag and drop for CV
+  const handleCvDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setCvDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setCvDragActive(false);
+    }
+  };
+
+  const handleCvDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCvDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const validation = validateFile(file);
+      if (validation.valid) {
+        setCvFile(file);
+        setCvMode('file');
+        setError('');
+      } else {
+        setError(`CV: ${validation.error}`);
+      }
+    }
+  };
+
+  // Drag and drop for JD
+  const handleJdDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setJdDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setJdDragActive(false);
+    }
+  };
+
+  const handleJdDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setJdDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const validation = validateFile(file);
+      if (validation.valid) {
+        setJdFile(file);
+        setJdMode('file');
+        setError('');
+      } else {
+        setError(`JD: ${validation.error}`);
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    // Validate CV input
+    if (cvMode === 'text' && !cvText.trim()) {
+      setError('Please enter CV text');
+      return;
+    }
+    if (cvMode === 'file' && !cvFile) {
+      setError('Please select or upload CV file');
+      return;
+    }
+
+    // Validate JD input
+    if (jdMode === 'text' && !jdText.trim()) {
+      setError('Please enter job description text');
+      return;
+    }
+    if (jdMode === 'file' && !jdFile) {
+      setError('Please select or upload job description file');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+
+      // Add CV data
+      if (cvMode === 'text') {
+        formData.append('cv_text', cvText);
+      } else {
+        formData.append('cv_file', cvFile);
+      }
+
+      // Add JD data
+      if (jdMode === 'text') {
+        formData.append('jd_text', jdText);
+      } else {
+        formData.append('jd_file', jdFile);
+      }
+
+      const response = await axios.post(
+        'http://localhost:8000/api/matches/predict_with_files/',
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      );
+
+      onResult(response.data);
+      setCvText('');
+      setJdText('');
+      setCvFile(null);
+      setJdFile(null);
+    } catch (err) {
+      console.error('Error:', err);
+      const errorMsg = err.response?.data?.details || 
+                      err.response?.data?.error ||
+                      'An error occurred. Please check your inputs and try again.';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="form-container">
+      <div className="form-card">
+        <h2 className="form-title">Analyze Your Match</h2>
+        <p className="form-description">
+          Submit your CV and job description (as text or file) to get an AI-powered match analysis
+        </p>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          {/* CV Section */}
+          <div className="form-section">
+            <h3 className="section-title">Your CV / Resume</h3>
+            <div className="mode-toggle">
+              <label className={`mode-option ${cvMode === 'text' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  value="text"
+                  checked={cvMode === 'text'}
+                  onChange={(e) => setCvMode(e.target.value)}
+                  disabled={loading}
+                />
+                📝 Text Input
+              </label>
+              <label className={`mode-option ${cvMode === 'file' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  value="file"
+                  checked={cvMode === 'file'}
+                  onChange={(e) => setCvMode(e.target.value)}
+                  disabled={loading}
+                />
+                📄 File Upload
+              </label>
+            </div>
+
+            {cvMode === 'text' ? (
+              <textarea
+                value={cvText}
+                onChange={(e) => setCvText(e.target.value)}
+                placeholder="Paste your CV or resume text here..."
+                className="form-textarea"
+                disabled={loading}
+              />
+            ) : (
+              <div
+                className={`file-upload-area ${cvDragActive ? 'drag-active' : ''}`}
+                onDragEnter={handleCvDrag}
+                onDragLeave={handleCvDrag}
+                onDragOver={handleCvDrag}
+                onDrop={handleCvDrop}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt,.pptx"
+                  onChange={handleCvFileChange}
+                  className="file-input"
+                  disabled={loading}
+                  id="cv-file-input"
+                />
+                <label htmlFor="cv-file-input" className="file-upload-label">
+                  {cvFile ? (
+                    <>
+                      <span className="file-icon">✅</span>
+                      <span className="file-name">{cvFile.name}</span>
+                      <span className="file-size">
+                        ({(cvFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="file-icon">📁</span>
+                      <span>Drag and drop your CV file here</span>
+                      <span className="or-text">or click to browse</span>
+                      <span className="supported-text">
+                        Supported: PDF, DOCX, DOC, TXT, PPTX (max 10MB)
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* JD Section */}
+          <div className="form-section">
+            <h3 className="section-title">Job Description</h3>
+            <div className="mode-toggle">
+              <label className={`mode-option ${jdMode === 'text' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  value="text"
+                  checked={jdMode === 'text'}
+                  onChange={(e) => setJdMode(e.target.value)}
+                  disabled={loading}
+                />
+                📝 Text Input
+              </label>
+              <label className={`mode-option ${jdMode === 'file' ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  value="file"
+                  checked={jdMode === 'file'}
+                  onChange={(e) => setJdMode(e.target.value)}
+                  disabled={loading}
+                />
+                📄 File Upload
+              </label>
+            </div>
+
+            {jdMode === 'text' ? (
+              <textarea
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+                placeholder="Paste the job description here..."
+                className="form-textarea"
+                disabled={loading}
+              />
+            ) : (
+              <div
+                className={`file-upload-area ${jdDragActive ? 'drag-active' : ''}`}
+                onDragEnter={handleJdDrag}
+                onDragLeave={handleJdDrag}
+                onDragOver={handleJdDrag}
+                onDrop={handleJdDrop}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt,.pptx"
+                  onChange={handleJdFileChange}
+                  className="file-input"
+                  disabled={loading}
+                  id="jd-file-input"
+                />
+                <label htmlFor="jd-file-input" className="file-upload-label">
+                  {jdFile ? (
+                    <>
+                      <span className="file-icon">✅</span>
+                      <span className="file-name">{jdFile.name}</span>
+                      <span className="file-size">
+                        ({(jdFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="file-icon">📁</span>
+                      <span>Drag and drop the JD file here</span>
+                      <span className="or-text">or click to browse</span>
+                      <span className="supported-text">
+                        Supported: PDF, DOCX, DOC, TXT, PPTX (max 10MB)
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className="form-actions">
+            <button 
+              type="submit" 
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? 'Analyzing...' : 'Analyze Match'}
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-secondary"
+              onClick={onHistoryClick}
+              disabled={loading}
+            >
+              View History
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default MatcherForm;
