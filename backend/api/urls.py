@@ -1,10 +1,8 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from .views import MatchResultViewSet
-
-router = DefaultRouter()
-router.register(r'matches', MatchResultViewSet, basename='match')
+from django.urls import path
+from .views import PredictionView, FileUploadPredictionView, supported_formats
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('predict/', PredictionView.as_view(), name='predict'),
+    path('predict-with-files/', FileUploadPredictionView.as_view(), name='predict-with-files'),
+    path('supported-formats/', supported_formats, name='supported-formats'),
 ]

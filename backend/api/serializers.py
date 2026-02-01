@@ -1,22 +1,4 @@
 from rest_framework import serializers
-from .models import MatchResult
-
-
-class MatchResultSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MatchResult
-        fields = [
-            'id',
-            'cv_text',
-            'jd_text',
-            'skill_match',
-            'experience_match',
-            'education_match',
-            'semantic_similarity',
-            'overall_match',
-            'created_at'
-        ]
-        read_only_fields = ['id', 'created_at']
 
 
 class PredictRequestSerializer(serializers.Serializer):

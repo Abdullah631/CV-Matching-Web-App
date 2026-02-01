@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './MatcherForm.css';
 
-const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
+const MatcherForm = ({ onResult, loading, setLoading }) => {
   const [cvText, setCvText] = useState('');
   const [jdText, setJdText] = useState('');
   const [cvFile, setCvFile] = useState(null);
@@ -167,7 +167,7 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
       }
 
       const response = await axios.post(
-        'http://localhost:8000/api/matches/predict_with_files/',
+        'http://localhost:8000/api/predict-with-files/',
         formData,
         {
           headers: {
@@ -193,40 +193,41 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
   };
 
   return (
-    <div className="form-container">
-      <div className="form-card">
-        <h2 className="form-title">Analyze Your Match</h2>
-        <p className="form-description">
-          Submit your CV and job description (as text or file) to get an AI-powered match analysis
-        </p>
+    <div className="form-container" id="matcher-form">
+      <div className="form-wrapper">
+        <div className="form-header">
+          <h1 className="form-title">Analyze Your CV Match</h1>
+          <p className="form-subtitle">Upload or paste your CV and the job description to see how well you match</p>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="matcher-form">
           {/* CV Section */}
           <div className="form-section">
-            <h3 className="section-title">Your CV / Resume</h3>
-            <div className="mode-toggle">
-              <label className={`mode-option ${cvMode === 'text' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  value="text"
-                  checked={cvMode === 'text'}
-                  onChange={(e) => setCvMode(e.target.value)}
-                  disabled={loading}
-                />
-                📝 Text Input
-              </label>
-              <label className={`mode-option ${cvMode === 'file' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  value="file"
-                  checked={cvMode === 'file'}
-                  onChange={(e) => setCvMode(e.target.value)}
-                  disabled={loading}
-                />
-                📄 File Upload
-              </label>
+            <div className="section-header">
+              <span className="section-icon">📄</span>
+              <h3>Your CV / Resume</h3>
+            </div>
+            <p className="section-description">Upload your CV file or paste the text content</p>
+
+            <div className="mode-tabs">
+              <button
+                type="button"
+                className={`mode-tab ${cvMode === 'text' ? 'active' : ''}`}
+                onClick={() => setCvMode('text')}
+                disabled={loading}
+              >
+                📝 Paste Text
+              </button>
+              <button
+                type="button"
+                className={`mode-tab ${cvMode === 'file' ? 'active' : ''}`}
+                onClick={() => setCvMode('file')}
+                disabled={loading}
+              >
+                📤 Upload File
+              </button>
             </div>
 
             {cvMode === 'text' ? (
@@ -258,18 +259,13 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
                     <>
                       <span className="file-icon">✅</span>
                       <span className="file-name">{cvFile.name}</span>
-                      <span className="file-size">
-                        ({(cvFile.size / 1024).toFixed(1)} KB)
-                      </span>
+                      <span className="file-size">({(cvFile.size / 1024).toFixed(1)} KB)</span>
                     </>
                   ) : (
                     <>
                       <span className="file-icon">📁</span>
-                      <span>Drag and drop your CV file here</span>
-                      <span className="or-text">or click to browse</span>
-                      <span className="supported-text">
-                        Supported: PDF, DOCX, DOC, TXT, PPTX (max 10MB)
-                      </span>
+                      <span className="upload-text">Drag and drop your file here</span>
+                      <span className="or-text">or click to select</span>
                     </>
                   )}
                 </label>
@@ -279,28 +275,29 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
 
           {/* JD Section */}
           <div className="form-section">
-            <h3 className="section-title">Job Description</h3>
-            <div className="mode-toggle">
-              <label className={`mode-option ${jdMode === 'text' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  value="text"
-                  checked={jdMode === 'text'}
-                  onChange={(e) => setJdMode(e.target.value)}
-                  disabled={loading}
-                />
-                📝 Text Input
-              </label>
-              <label className={`mode-option ${jdMode === 'file' ? 'active' : ''}`}>
-                <input
-                  type="radio"
-                  value="file"
-                  checked={jdMode === 'file'}
-                  onChange={(e) => setJdMode(e.target.value)}
-                  disabled={loading}
-                />
-                📄 File Upload
-              </label>
+            <div className="section-header">
+              <span className="section-icon">💼</span>
+              <h3>Job Description</h3>
+            </div>
+            <p className="section-description">Upload the job description file or paste the text content</p>
+
+            <div className="mode-tabs">
+              <button
+                type="button"
+                className={`mode-tab ${jdMode === 'text' ? 'active' : ''}`}
+                onClick={() => setJdMode('text')}
+                disabled={loading}
+              >
+                📝 Paste Text
+              </button>
+              <button
+                type="button"
+                className={`mode-tab ${jdMode === 'file' ? 'active' : ''}`}
+                onClick={() => setJdMode('file')}
+                disabled={loading}
+              >
+                📤 Upload File
+              </button>
             </div>
 
             {jdMode === 'text' ? (
@@ -332,18 +329,13 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
                     <>
                       <span className="file-icon">✅</span>
                       <span className="file-name">{jdFile.name}</span>
-                      <span className="file-size">
-                        ({(jdFile.size / 1024).toFixed(1)} KB)
-                      </span>
+                      <span className="file-size">({(jdFile.size / 1024).toFixed(1)} KB)</span>
                     </>
                   ) : (
                     <>
                       <span className="file-icon">📁</span>
-                      <span>Drag and drop the JD file here</span>
-                      <span className="or-text">or click to browse</span>
-                      <span className="supported-text">
-                        Supported: PDF, DOCX, DOC, TXT, PPTX (max 10MB)
-                      </span>
+                      <span className="upload-text">Drag and drop the file here</span>
+                      <span className="or-text">or click to select</span>
                     </>
                   )}
                 </label>
@@ -351,23 +343,16 @@ const MatcherForm = ({ onResult, loading, setLoading, onHistoryClick }) => {
             )}
           </div>
 
-          <div className="form-actions">
-            <button 
-              type="submit" 
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              {loading ? 'Analyzing...' : 'Analyze Match'}
-            </button>
-            <button 
-              type="button" 
-              className="btn btn-secondary"
-              onClick={onHistoryClick}
-              disabled={loading}
-            >
-              View History
-            </button>
-          </div>
+          <button type="submit" className="btn-submit" disabled={loading}>
+            {loading ? (
+              <>
+                <span className="spinner"></span>
+                Analyzing...
+              </>
+            ) : (
+              'Analyze Match'
+            )}
+          </button>
         </form>
       </div>
     </div>

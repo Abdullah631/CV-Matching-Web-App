@@ -1,24 +1,21 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import status
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from .models import MatchResult
-from .serializers import MatchResultSerializer, PredictRequestSerializer, PredictWithFilesSerializer
+from rest_framework.views import APIView
+from .serializers import PredictRequestSerializer, PredictWithFilesSerializer
 from matcher.ml.predictor import predict_match
 from matcher.ml.file_extractor import FileExtractor, FileExtractionError
 from matcher.ml.preprocessor import TextPreprocessor
 
 
-class MatchResultViewSet(viewsets.ModelViewSet):
+class PredictionView(APIView):
     """
-    API endpoint for CV-JD matching results
+    API endpoint for CV-JD matching predictions (stateless)
     """
-    queryset = MatchResult.objects.all()
-    serializer_class = MatchResultSerializer
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-    @action(detail=False, methods=['post'], name='Predict Match')
-    def predict(self, request):
+    def post(self, request):
         """
         Predict CV-JD match scores (text only)
         
@@ -44,8 +41,14 @@ class MatchResultViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], name='Predict Match with Files')
-    def predict_with_files(self, request):
+
+class FileUploadPredictionView(APIView):
+    """
+    API endpoint for CV-JD matching with file uploads (stateless)
+    """
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    
+    def post(self, request):
         """
         Predict CV-JD match scores with file upload support
         
@@ -102,7 +105,8 @@ class MatchResultViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def _process_prediction(self, cv_text: str, jd_text: str) -> Response:
+    @staticmethod
+    def _process_prediction(cv_text: str, jd_text: str) -> Response:
         """
         Internal method to process prediction after text extraction
         """
@@ -130,28 +134,20 @@ class MatchResultViewSet(viewsets.ModelViewSet):
             # Get prediction from ML model (use cleaned text)
             result = predict_match(cv_preprocessed['cleaned'], jd_preprocessed['cleaned'])
             
-            # Save to database
-            match_result = MatchResult.objects.create(
-                cv_text=cv_text,
-                jd_text=jd_text,
-                skill_match=result['skill_match'],
-                experience_match=result['experience_match'],
-                education_match=result['education_match'],
-                semantic_similarity=result['semantic_similarity'],
-                overall_match=result['overall_match']
-            )
-            
-            # Return result with preprocessing statistics
-            response_serializer = MatchResultSerializer(match_result)
-            response_data = response_serializer.data
-            
-            # Add preprocessing stats for transparency
-            response_data['preprocessing'] = {
-                'cv_stats': TextPreprocessor.get_preprocessing_stats(cv_text),
-                'jd_stats': TextPreprocessor.get_preprocessing_stats(jd_text)
+            # Return result with preprocessing statistics (no database save)
+            response_data = {
+                'skill_match': result['skill_match'],
+                'experience_match': result['experience_match'],
+                'education_match': result['education_match'],
+                'semantic_similarity': result['semantic_similarity'],
+                'overall_match': result['overall_match'],
+                'preprocessing': {
+                    'cv_stats': TextPreprocessor.get_preprocessing_stats(cv_text),
+                    'jd_stats': TextPreprocessor.get_preprocessing_stats(jd_text)
+                }
             }
             
-            return Response(response_data, status=status.HTTP_201_CREATED)
+            return Response(response_data, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response(
@@ -162,24 +158,18 @@ class MatchResultViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['get'], name='Get History')
-    def history(self, request):
-        """Get match history"""
-        results = MatchResult.objects.all()[:50]
-        serializer = MatchResultSerializer(results, many=True)
-        return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], name='Supported Formats')
-    def supported_formats(self, request):
-        """Get list of supported file formats"""
-        return Response({
-            'file_formats': {
-                'pdf': 'Adobe PDF',
-                'docx': 'Microsoft Word (.docx)',
-                'doc': 'Microsoft Word (.doc)',
-                'txt': 'Plain Text',
-                'pptx': 'PowerPoint Presentation'
-            },
-            'max_file_size_mb': 10,
-            'text_modes': ['text_input', 'file_upload', 'both']
-        })
+@api_view(['GET'])
+def supported_formats(request):
+    """Get list of supported file formats"""
+    return Response({
+        'file_formats': {
+            'pdf': 'Adobe PDF',
+            'docx': 'Microsoft Word (.docx)',
+            'doc': 'Microsoft Word (.doc)',
+            'txt': 'Plain Text',
+            'pptx': 'PowerPoint Presentation'
+        },
+        'max_file_size_mb': 10,
+        'text_modes': ['text_input', 'file_upload', 'both']
+    })

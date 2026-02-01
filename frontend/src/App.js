@@ -1,34 +1,31 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
-import Navbar from './components/Navbar';
-import MatcherForm from './components/MatcherForm';
-import ResultsDisplay from './components/ResultsDisplay';
-import History from './components/History';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Home from './pages/Home';
+import Analyzer from './pages/Analyzer';
+import Results from './pages/Results';
+import Features from './pages/Features';
+import HowItWorks from './pages/HowItWorks';
 
 function App() {
-  const [matchResult, setMatchResult] = useState(null);
-  const [showHistory, setShowHistory] = useState(false);
-  const [loading, setLoading] = useState(false);
-
   return (
-    <div className="App">
-      <Navbar />
-      <main className="main-content">
-        {!showHistory ? (
-          <>
-            <MatcherForm 
-              onResult={setMatchResult} 
-              loading={loading}
-              setLoading={setLoading}
-              onHistoryClick={() => setShowHistory(true)}
-            />
-            {matchResult && <ResultsDisplay result={matchResult} />}
-          </>
-        ) : (
-          <History onBack={() => setShowHistory(false)} />
-        )}
-      </main>
-    </div>
+    <Router>
+      <div className="App">
+        <Header />
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/analyzer" element={<Analyzer />} />
+            <Route path="/results" element={<Results />} />
+            <Route path="/features" element={<Features />} />
+            <Route path="/how-it-works" element={<HowItWorks />} />
+          </Routes>
+        </main>
+        <Footer />
+      </div>
+    </Router>
   );
 }
 
