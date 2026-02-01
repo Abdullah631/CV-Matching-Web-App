@@ -11,3 +11,15 @@ db.sqlite3
 *.log
 .DS_Store
 node_modules/
+
+# Python
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+.env
+
+# ML
+*.pkl
+*.pt
+*.h5
